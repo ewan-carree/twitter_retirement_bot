@@ -29,7 +29,7 @@ def get_scraper(args: argparse.Namespace) -> str:
 
 def search(search_pattern: str, scrapper: str, max_results: int, output: str) -> list[dict[str, str]]:
     os.system(
-        f"snscrape --jsonl --max-results {max_results} {scrapper} {search_pattern} > {output}")
+        f"snscrape --jsonl --max-results {max_results} {scrapper} '{search_pattern}' > {output}")
 
     # load JSON data from file
     with open(f"{output}", "r") as file:
