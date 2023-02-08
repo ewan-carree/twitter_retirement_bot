@@ -6,6 +6,8 @@ import os
 import datetime
 import subprocess
 import time
+from typing import Callable, Any
+
 
 def get_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -34,31 +36,54 @@ def get_scraper(args: argparse.Namespace) -> str:
         return "twitter-hashtag"
     else:
         return "twitter-search"
-    
 
+def time_it(func: Callable[..., Any]) -> Callable[..., Any]:
+    def wrapper(*args : Any, **kwargs: Any):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        print(f"Executed in {end - start:.6f} seconds")
+        return result
+    return wrapper
+
+def progress_bar(iteration: int, total: int, prefix: str = '', suffix: str = '', decimals: int =1, length: int =100, fill: str ='█') -> None:
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
+    if iteration == total: 
+        print()
+
+@time_it
 def analyze(n_results: int, output: str, until: str, lang: str) -> None:
     records: list[dict[str, str]] = []
-    while True:
+    remaining = n_results
+    
+    temp_size: int = 0
+    while remaining != 0:
         with open(f"{output}", "r") as file:
             data: list[str] = file.readlines()
-            if len(data) > n_results:
-                break
-        
-    for str_record in data:
-        time.sleep(0.001) # to avoid rate limit
-        record:  dict[str, str] = json.loads(str_record)
-        if record["lang"] == lang and record not in records and record["date"] <= until:
-            records.append(record)
-        if len(records) >= n_results:
-            break
-        
+            if len(data) < n_results:
+                progress_bar(len(data), n_results, "Scrapping")
+                continue
+            for str_record in data[temp_size:]:
+                time.sleep(0.001)
+                record = json.loads(str_record)
+                if record["lang"] == lang and record not in records and record["date"] <= until:
+                    records.append(record)
+                    remaining -= 1
+                    progress_bar(len(records), n_results, "Analyzing")
+                    if remaining == 0:
+                        break
+                temp_size = len(data)
+    
     format_json(records, output)
 
 def format_json(records: list[dict[str, str]], output: str) -> None:
     wrapped_data = {"records": records}
     with open("sorted_" + output, "w") as file:
         json.dump(wrapped_data, file, indent=4)
-
+        
 
 if __name__ == "__main__":
     args = get_arguments()
@@ -82,6 +107,6 @@ if __name__ == "__main__":
     
     read_process.join()
     write_process.kill()
-    
+        
     os.remove(f"{args.output}")   
     print("---------- Done, check json for more information ----------")
